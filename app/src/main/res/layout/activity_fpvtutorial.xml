@@ -10,27 +10,48 @@
         android:layout_height="40dp"
         android:background="@color/black_overlay" >
 
-        <ImageButton
-            android:id="@+id/ReturnBtnCamera"
-            android:layout_width="wrap_content"
-            android:layout_height="35dp"
-            android:layout_alignParentLeft="true"
-            android:layout_centerVertical="true"
-            android:layout_marginLeft="20dp"
-            android:adjustViewBounds="true"
-            android:background="@android:color/transparent"
-            android:onClick="onReturn"
-            android:scaleType="centerInside"
-            android:src="@drawable/selector_back_button" />
-
         <TextView
             android:id="@+id/ConnectStatusTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerInParent="true"
             android:text=""
             android:textColor="@android:color/white"
-            android:textSize="21sp" />
+            android:textSize="21sp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentStart="true" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:layout_toEndOf="@+id/ConnectStatusTextView">
+            <Button
+                android:id="@+id/lock_yaw"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical"
+                android:layout_height="wrap_content"
+                android:text="Yaw"
+                android:drawableLeft="@drawable/ic_action_unlocked"
+                android:textSize="12sp"/>
+            <Button
+                android:id="@+id/lock_pitch"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical"
+                android:layout_height="wrap_content"
+                android:text="Pitch"
+                android:drawableLeft="@drawable/ic_action_unlocked"
+                android:textSize="12sp"/>
+            <Button
+                android:id="@+id/lock_roll"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_gravity="center_vertical"
+                android:layout_height="wrap_content"
+                android:text="Roll"
+                android:drawableLeft="@drawable/ic_action_unlocked"
+                android:textSize="12sp"/>
+        </LinearLayout>
     </RelativeLayout>
     
     <TextureView
@@ -47,7 +68,7 @@
       android:orientation="horizontal"
       android:layout_alignParentBottom="true">
     <Button
-        android:id="@+id/button1"
+        android:id="@+id/capture_btn"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_gravity="center_vertical"
@@ -56,7 +77,7 @@
         android:textSize="12sp"/>
 
     <Button
-        android:id="@+id/button2"
+        android:id="@+id/record_btn"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="wrap_content"
@@ -65,7 +86,7 @@
         android:textSize="12sp"/>
      
     <Button
-        android:id="@+id/button3"
+        android:id="@+id/stop_record_btn"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="wrap_content"
@@ -73,19 +94,22 @@
         android:text="Stop recording" 
         android:textSize="12sp"/>
      <Button
-         android:id="@+id/button4"
+         android:id="@+id/follow_btn"
          android:layout_width="0dp"
          android:layout_weight="1"
          android:layout_height="wrap_content"
          android:layout_gravity="center_vertical"
-         android:text="Dev stuff"
+         android:text="Start Follow"
          android:textSize="12sp"/>
     <TextView
         android:id="@+id/timer"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"/>
+        android:layout_gravity="center_vertical"
+        android:textIsSelectable="false"
+        android:textSize="30dp"
+        android:text="0" />
   </LinearLayout>
 
 </RelativeLayout>
