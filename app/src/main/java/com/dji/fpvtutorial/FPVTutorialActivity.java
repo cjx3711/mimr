@@ -23,6 +23,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import de.greenrobot.event.EventBus;
 import dji.sdk.AirLink.DJILBAirLink.DJIOnReceivedVideoCallback;
 import dji.sdk.Camera.DJICamera;
 import dji.sdk.Camera.DJICamera.CameraReceivedVideoDataCallback;
@@ -128,6 +129,8 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             }
         };
 
+        //EventBus.getDefault().register(this);
+
         // Register the broadcast receiver for receiving the device connection's changes.
         IntentFilter filter = new IntentFilter();
         filter.addAction(FPVTutorialApplication.FLAG_CONNECTION_CHANGE);
@@ -194,6 +197,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         Log.e(TAG, "onDestroy");
         uninitPreviewer();
 
+        //EventBus.getDefault().unregister(this);
         unregisterReceiver(mReceiver);
 
         super.onDestroy();
