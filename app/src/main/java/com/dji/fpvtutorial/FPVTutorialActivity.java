@@ -1,18 +1,18 @@
 package com.dji.fpvtutorial;
 
-import com.dji.fpvtutorial.R;
-
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.SurfaceTexture;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
@@ -26,6 +26,7 @@ import dji.sdk.AirLink.DJILBAirLink.DJIOnReceivedVideoCallback;
 import dji.sdk.Camera.DJICamera;
 import dji.sdk.Camera.DJICamera.CameraReceivedVideoDataCallback;
 import dji.sdk.Codec.DJICodecManager;
+import dji.sdk.Gimbal.DJIGimbal;
 import dji.sdk.Products.DJIAircraft;
 import dji.sdk.base.DJIBaseComponent.DJICompletionCallback;
 import dji.sdk.base.DJIBaseProduct;
@@ -35,7 +36,7 @@ import dji.sdk.Camera.DJICameraSettingsDef.CameraMode;
 import dji.sdk.Camera.DJICameraSettingsDef.CameraShootPhotoMode;
 
 
-public class FPVTutorialActivity extends Activity implements SurfaceTextureListener,OnClickListener{
+public class FPVTutorialActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
 
     private static final String TAG = FPVTutorialActivity.class.getName();
 
@@ -57,6 +58,22 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     private TextView viewTimer;
     private int i = 0;
     private int TIME = 1000;
+
+    //Gimbal control
+    private DJIGimbal gimbal;
+
+    //Phone stuff
+    public static double roll;
+    public static double pitch;
+    public static double azimuth;
+
+    public static SensorManager mSensorManager;
+    public static Sensor accelerometer;
+    public static Sensor magnetometer;
+
+    public static float[] mAccelerometer = null;
+    public static float[] mGeomagnetic = null;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +115,13 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         registerReceiver(mReceiver, filter);
 
 
+
+        //Sensor stuff
+        mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+
     }
 
 
@@ -110,6 +134,9 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         if(mVideoSurface == null) {
             Log.e(TAG, "mVideoSurface is null");
         }
+
+        mSensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        mSensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_GAME);
     }
 
     @Override
@@ -117,6 +144,9 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         Log.e(TAG, "onPause");
         uninitPreviewer();
         super.onPause();
+
+        mSensorManager.unregisterListener(this, accelerometer);
+        mSensorManager.unregisterListener(this, magnetometer);
     }
 
     @Override
@@ -182,11 +212,16 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             mProduct = null;
         }
 
+
         if (null == mProduct || !mProduct.isConnected()) {
             mCamera = null;
             showToast(getString(R.string.disconnected));
         } else {
-
+            try {
+                gimbal = mProduct.getGimbal();
+            } catch ( Exception e ) {
+                gimbal = null;
+            }
 
             if (null != mVideoSurface) {
                 mVideoSurface.setSurfaceTextureListener(this);
@@ -340,6 +375,41 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             }
         });
     }
+
+
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // onSensorChanged gets called for each sensor so we have to remember the values
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            mAccelerometer = event.values;
+        }
+
+        if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            mGeomagnetic = event.values;
+        }
+
+        if (mAccelerometer != null && mGeomagnetic != null) {
+            float R[] = new float[9];
+            float I[] = new float[9];
+            boolean success = SensorManager.getRotationMatrix(R, I, mAccelerometer, mGeomagnetic);
+
+            if (success) {
+                float orientation[] = new float[3];
+                SensorManager.getOrientation(R, orientation);
+                // at this point, orientation contains the azimuth(direction), pitch and roll values.
+                azimuth = 180 * orientation[0] / Math.PI;
+                pitch = 180 * orientation[1] / Math.PI;
+                roll = 180 * orientation[2] / Math.PI;
+
+                Log.v("Orientation", "a:" + azimuth + " p:" + pitch + " r:" + roll);
+            }
+        }
+    }
+
+
 
 
 
