@@ -18,7 +18,7 @@ import dji.sdk.base.DJISDKError;
  *
  */
 
-public class FPVTutorialApplication extends Application{
+public class FPVTutorialApplication extends Application {
 
     //private static final String TAG = FPVTutorialApplication.class.getName();
 

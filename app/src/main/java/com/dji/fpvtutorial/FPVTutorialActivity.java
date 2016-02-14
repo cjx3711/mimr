@@ -12,6 +12,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.TextureView;
@@ -39,7 +40,7 @@ import dji.sdk.Camera.DJICameraSettingsDef.CameraShootPhotoMode;
 public class FPVTutorialActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
 
     private static final String TAG = FPVTutorialActivity.class.getName();
-
+    private static final String MYTAG = "self";
     private static final int INTERVAL_LOG = 300;
     private static long mLastTime = 0l;
 
@@ -54,18 +55,23 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     protected TextView mConnectStatusTextView;
     //Video Preview
     protected TextureView mVideoSurface = null;
-    private Button captureAction, recordAction, captureMode;
+    private Button captureAction, recordAction, captureMode, devButton;
     private TextView viewTimer;
     private int i = 0;
     private int TIME = 1000;
 
     //Gimbal control
     private DJIGimbal gimbal;
+    private boolean followMode = false;
 
     //Phone stuff
-    public static double roll;
-    public static double pitch;
-    public static double azimuth;
+    public static double roll = 0;
+    public static double pitch = 0;
+    public static double yaw = 0;
+    public static double azimuth = 0;
+    public static double azimuthPrev = 0;
+    public static double azimuthDelta = 0;
+    public static int slowdownCounter = 0;
 
     public static SensorManager mSensorManager;
     public static Sensor accelerometer;
@@ -73,7 +79,16 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     public static float[] mAccelerometer = null;
     public static float[] mGeomagnetic = null;
-
+    private DJIGimbal.DJIGimbalAngleRotation djiPitch;
+    private DJIGimbal.DJIGimbalAngleRotation djiRoll;
+    private DJIGimbal.DJIGimbalAngleRotation djiYaw;
+    private PowerManager.WakeLock wakeLock;
+    private int pitchMax = 89;
+    private int pitchMin = -20;
+    private int yawMax = 300;
+    private int yawMin = -300;
+    private int rollMax = 20;
+    private int rollMin = -20;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -122,6 +137,10 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
 
+        djiPitch = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
+        djiRoll = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
+        djiYaw = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
+
     }
 
 
@@ -137,6 +156,10 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
         mSensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
         mSensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_GAME);
+
+        PowerManager powerManager = (PowerManager)getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK, "My Lock");
+        wakeLock.acquire();
     }
 
     @Override
@@ -145,8 +168,10 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         uninitPreviewer();
         super.onPause();
 
+
         mSensorManager.unregisterListener(this, accelerometer);
         mSensorManager.unregisterListener(this, magnetometer);
+        wakeLock.release();
     }
 
     @Override
@@ -179,6 +204,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         captureAction = (Button) findViewById(R.id.button1);
         recordAction = (Button) findViewById(R.id.button2);
         captureMode = (Button) findViewById(R.id.button3);
+        devButton = (Button) findViewById(R.id.button4);
 
         if (null != mVideoSurface) {
             mVideoSurface.setSurfaceTextureListener(this);
@@ -186,7 +212,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         captureAction.setOnClickListener(this);
         recordAction.setOnClickListener(this);
         captureMode.setOnClickListener(this);
-
+        devButton.setOnClickListener(this);
     }
 
     private Handler handlerTimer = new Handler();
@@ -195,7 +221,6 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         public void run() {
             // handler自带方法实现定时器
             try {
-
                 handlerTimer.postDelayed(this, TIME);
                 viewTimer.setText(Integer.toString(i++));
 
@@ -211,7 +236,6 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         } catch (Exception exception) {
             mProduct = null;
         }
-
 
         if (null == mProduct || !mProduct.isConnected()) {
             mCamera = null;
@@ -401,10 +425,33 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
                 SensorManager.getOrientation(R, orientation);
                 // at this point, orientation contains the azimuth(direction), pitch and roll values.
                 azimuth = 180 * orientation[0] / Math.PI;
-                pitch = 180 * orientation[1] / Math.PI;
-                roll = 180 * orientation[2] / Math.PI;
+                roll = 180 * orientation[1] / Math.PI;
+                pitch = 180 * orientation[2] / Math.PI - 90;
 
-                Log.v("Orientation", "a:" + azimuth + " p:" + pitch + " r:" + roll);
+                azimuthDelta = azimuth - azimuthPrev;
+                if ( azimuthDelta > 270 ) azimuthDelta -= 360;
+                if ( azimuthDelta < -270 ) azimuthDelta += 360;
+                azimuthPrev = azimuth;
+
+                if (followMode) yaw += azimuthDelta;
+                if ( yaw < yawMin ) yaw = yawMin;
+                if ( yaw > yawMax ) yaw = yawMax;
+                if ( roll < rollMin ) roll = rollMin;
+                if ( roll > rollMax ) roll = rollMax;
+                if ( pitch < pitchMin ) pitch = pitchMin;
+                if ( pitch > pitchMax ) pitch = pitchMax;
+
+                if ( followMode ) {
+                    slowdownCounter --;
+                    if ( slowdownCounter <= 0 ) {
+                        mapGimbalDirection();
+                        slowdownCounter = 5;
+                        Log.v("Orientation", "a:" + (int)azimuth + " p:" + (int)pitch + " r:" + (int)roll);
+                    }
+                }
+
+                //Log.v("Orientation", "y:" + (int)yaw + " d:" + (int)azimuthDelta + " a:" + (int)azimuth);
+
             }
         }
     }
@@ -416,6 +463,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     @Override
     public void onClick(View v) {
 
+
         try {
             mProduct = FPVTutorialApplication.getProductInstance();
         } catch (Exception exception) {
@@ -425,20 +473,44 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         if (null == mProduct || !mProduct.isConnected()) {
             mCamera = null;
             showToast(getString(R.string.disconnected));
-            return;
-        }
+        } else {
 
+            switch (v.getId()) {
+                case R.id.button1: {
+                    captureAction();
+                    break;
+                }
+                case R.id.button2: {
+                    recordAction();
+                    break;
+                }
+                case R.id.button3: {
+                    stopRecord();
+                    break;
+                }
+                case R.id.button4: {
+                    devFunction();
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
         switch (v.getId()) {
             case R.id.button1:{
-                captureAction();
+                dev1();
                 break;
             }
             case R.id.button2:{
-                recordAction();
+                dev2();
                 break;
             }
             case R.id.button3:{
-                stopRecord();
+                dev3();
+                break;
+            }
+            case R.id.button4:{
+                dev4();
                 break;
             }
             default:
@@ -494,23 +566,18 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             @Override
             public void onResult(DJIError error)
             {
-
                 if (error == null) {
-
-
-                    mCamera.startRecordVideo(new DJICompletionCallback(){
+                    mCamera.startRecordVideo(new DJICompletionCallback() {
 
                         @Override
-                        public void onResult(DJIError error)
-                        {
+                        public void onResult(DJIError error) {
                             if (error == null) {
                                 showToast("Record video: success");
                                 handlerTimer.postDelayed(runnable, TIME); // Start the timer for recording
-                            }else {
+                            } else {
                                 showToast(error.getDescription());
                             }
                         }
-
                     }); // Execute the startShootPhoto API
                 } else {
                     showToast(error.getDescription());
@@ -523,17 +590,14 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     }
     // function for stopping recording
     private void stopRecord(){
-
         mCamera = mProduct.getCamera();
-
-        mCamera.stopRecordVideo(new DJICompletionCallback(){
+        mCamera.stopRecordVideo(new DJICompletionCallback() {
 
             @Override
-            public void onResult(DJIError error)
-            {
-                if(error == null) {
+            public void onResult(DJIError error) {
+                if (error == null) {
                     showToast("Stop recording: success");
-                }else {
+                } else {
                     showToast(error.getDescription());
                 }
                 handlerTimer.removeCallbacks(runnable); // Start the timer for recording
@@ -541,5 +605,56 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             }
 
         });
+    }
+
+    private void mapGimbalDirection () {
+        setGimbalDirection((float) pitch, (float) roll, (float) yaw);
+    }
+    private void setGimbalDirection ( float pitch, float roll, float yaw ) {
+        djiPitch.angle = -pitch;
+        djiRoll.angle = -roll;
+        djiYaw.angle = yaw;
+        gimbal.rotateGimbalByAngle(
+                DJIGimbal.DJIGimbalRotateAngleMode.AbsoluteAngle,
+                djiPitch, djiRoll, djiYaw,
+                null
+        );
+    }
+
+    private void devFunction() {
+        followMode = !followMode;
+        yaw = 0;
+        mapGimbalDirection();
+    }
+
+    private void dev1() {
+
+    }
+    private void dev2() {
+
+    }
+    private void dev3() {
+
+    }
+    private void dev4() {
+        if ( gimbal == null ) {
+            Log.e(MYTAG, "No gimbal");
+            return;
+        }
+        DJIGimbal.DJIGimbalConstraints constraints = gimbal.getDjiGimbalConstraints();
+        if ( constraints == null ) {
+            Log.e(MYTAG, "No Constraints");
+            return;
+        }
+        pitchMax = (int) constraints.getPitchStopMax();
+        pitchMin = (int) constraints.getPitchStopMin();
+        yawMax = (int) constraints.getYawStopMax();
+        yawMin = (int) constraints.getYawStopMin();
+        rollMax = (int) constraints.getRollStopMax();
+        rollMin = (int) constraints.getRollStopMin();
+
+        Log.d(MYTAG, "Pitch: " + pitchMin + " - " + pitchMax);
+        Log.d(MYTAG, "Roll : " + rollMin + " - " + rollMax);
+        Log.d(MYTAG, "Yaw  : " + yawMin + " - " + yawMax);
     }
 }
