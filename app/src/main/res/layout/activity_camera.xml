@@ -14,20 +14,31 @@
             android:id="@+id/ConnectStatusTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=""
+            android:text="Disconnected"
             android:textColor="@android:color/white"
             android:textSize="21sp"
-            android:layout_centerVertical="true"
-            android:layout_alignParentStart="true" />
+            android:layout_alignParentStart="true"
+            android:layout_toStartOf="@+id/battery_percentage"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentBottom="true" />
+        <TextView
+            android:id="@+id/battery_percentage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentBottom="true"
+            android:layout_toStartOf="@+id/linearLayout" />
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:layout_alignParentEnd="true"
-            android:layout_toEndOf="@+id/ConnectStatusTextView">
+            android:id="@+id/linearLayout">
             <Button
                 android:id="@+id/lock_yaw"
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_width="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:layout_height="wrap_content"
                 android:text="Yaw"
@@ -35,8 +46,7 @@
                 android:textSize="12sp"/>
             <Button
                 android:id="@+id/lock_pitch"
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_width="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:layout_height="wrap_content"
                 android:text="Pitch"
@@ -44,8 +54,7 @@
                 android:textSize="12sp"/>
             <Button
                 android:id="@+id/lock_roll"
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_width="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:layout_height="wrap_content"
                 android:text="Roll"
@@ -100,6 +109,14 @@
          android:layout_height="wrap_content"
          android:layout_gravity="center_vertical"
          android:text="Start Follow"
+         android:textSize="12sp"/>
+     <Button
+         android:id="@+id/reset_btn"
+         android:layout_width="0dp"
+         android:layout_weight="1"
+         android:layout_height="wrap_content"
+         android:layout_gravity="center_vertical"
+         android:text="Reset"
          android:textSize="12sp"/>
     <TextView
         android:id="@+id/timer"

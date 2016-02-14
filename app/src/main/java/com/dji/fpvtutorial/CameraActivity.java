@@ -12,6 +12,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.os.PowerManager;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -23,14 +24,13 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import de.greenrobot.event.EventBus;
 import dji.sdk.AirLink.DJILBAirLink.DJIOnReceivedVideoCallback;
+import dji.sdk.Battery.DJIBattery;
 import dji.sdk.Camera.DJICamera;
 import dji.sdk.Camera.DJICamera.CameraReceivedVideoDataCallback;
 import dji.sdk.Codec.DJICodecManager;
 import dji.sdk.Gimbal.DJIGimbal;
 import dji.sdk.Products.DJIAircraft;
-import dji.sdk.base.DJIBaseComponent;
 import dji.sdk.base.DJIBaseComponent.DJICompletionCallback;
 import dji.sdk.base.DJIBaseProduct;
 import dji.sdk.base.DJIBaseProduct.Model;
@@ -39,9 +39,9 @@ import dji.sdk.Camera.DJICameraSettingsDef.CameraMode;
 import dji.sdk.Camera.DJICameraSettingsDef.CameraShootPhotoMode;
 
 
-public class FPVTutorialActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
+public class CameraActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
 
-    private static final String TAG = FPVTutorialActivity.class.getName();
+    private static final String TAG = CameraActivity.class.getName();
     private static final String MYTAG = "self";
     private static final int INTERVAL_LOG = 300;
     private static long mLastTime = 0l;
@@ -51,20 +51,21 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     private DJIBaseProduct mProduct = null;
     private DJICamera mCamera = null;
+    private DJIBattery mBattery = null;
     // Codec for video live view
     protected DJICodecManager mCodecManager = null;
 
-    protected TextView mConnectStatusTextView;
+    protected TextView mConnectStatusTextView, mBatteryTextView;
     //Video Preview
     protected TextureView mVideoSurface = null;
-    private Button captureButton, recordButton, stopRecordButton, followButton;
+    private Button captureButton, recordButton, stopRecordButton, followButton, resetButton;
     private Button lPButton, lYButton, lRButton;
     private TextView viewTimer;
     private int i = 0;
     private int TIME = 1000;
 
     //Gimbal control
-    private DJIGimbal gimbal;
+    private DJIGimbal mGimbal;
     private boolean followMode = false;
     private boolean recording = false;
 
@@ -96,11 +97,15 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     private boolean lockedYaw = false, lockedPitch = false, lockedRoll = false;
 
+
+    public CameraActivity() {
+        mStringBuffer = new StringBuffer();
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_fpvtutorial);
+        setContentView(R.layout.activity_camera);
 
         initUI();
 
@@ -133,7 +138,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
         // Register the broadcast receiver for receiving the device connection's changes.
         IntentFilter filter = new IntentFilter();
-        filter.addAction(FPVTutorialApplication.FLAG_CONNECTION_CHANGE);
+        filter.addAction(MimrApplication.FLAG_CONNECTION_CHANGE);
         registerReceiver(mReceiver, filter);
 
 
@@ -205,6 +210,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     private void initUI() {
         mConnectStatusTextView = (TextView) findViewById(R.id.ConnectStatusTextView);
+        mBatteryTextView = (TextView) findViewById(R.id.battery_percentage);
         // init mVideoSurface
         mVideoSurface = (TextureView)findViewById(R.id.video_previewer_surface);
 
@@ -213,7 +219,9 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         recordButton = (Button) findViewById(R.id.record_btn);
         stopRecordButton = (Button) findViewById(R.id.stop_record_btn);
         followButton = (Button) findViewById(R.id.follow_btn);
+        resetButton = (Button) findViewById(R.id.reset_btn);
         stopRecordButton.setVisibility(View.GONE);
+        resetButton.setVisibility(View.GONE);
 
         lPButton = (Button) findViewById(R.id.lock_pitch);
         lRButton = (Button) findViewById(R.id.lock_roll);
@@ -225,6 +233,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         captureButton.setOnClickListener(this);
         recordButton.setOnClickListener(this);
         stopRecordButton.setOnClickListener(this);
+        resetButton.setOnClickListener(this);
         followButton.setOnClickListener(this);
         lPButton.setOnClickListener(this);
         lRButton.setOnClickListener(this);
@@ -246,9 +255,28 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         }
     };
 
+    protected static final int CHANGE_TEXT_VIEW = 0;
+
+    protected StringBuffer mStringBuffer;
+    protected Handler mHandler = new Handler(new Handler.Callback() {
+
+        @Override
+        public boolean handleMessage(Message msg) {
+            switch (msg.what) {
+                case CHANGE_TEXT_VIEW :
+                    mBatteryTextView.setText(mStringBuffer.toString());
+                    break;
+
+                default:
+                    break;
+            }
+            return false;
+        }
+    });
+
     private void initPreviewer() {
         try {
-            mProduct = FPVTutorialApplication.getProductInstance();
+            mProduct = MimrApplication.getProductInstance();
         } catch (Exception exception) {
             mProduct = null;
         }
@@ -258,13 +286,41 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
             showToast(getString(R.string.disconnected));
         } else {
             try {
-                gimbal = mProduct.getGimbal();
+                mGimbal = mProduct.getGimbal();
             } catch ( Exception e ) {
-                gimbal = null;
+                mGimbal = null;
+            }
+            try {
+                mBattery = mProduct.getBattery();
+            } catch ( Exception e ) {
+                mBattery = null;
             }
 
+            mBattery.setBatteryStateUpdateCallback(
+                    new DJIBattery.DJIBatteryStateUpdateCallback() {
+                        @Override
+                        public void onResult(DJIBattery.DJIBatteryState djiBatteryState) {
+                            mStringBuffer.delete(0, mStringBuffer.length());
+
+                            mStringBuffer.append(djiBatteryState.getBatteryEnergyRemainingPercent()).
+                                    append("% ");
+                            mStringBuffer.
+                                    append(djiBatteryState.getCurrentVoltage()).append("mV ");
+                            mStringBuffer.
+                                    append(djiBatteryState.getCurrentCurrent()).append("mA");
+
+                            mHandler.sendEmptyMessage(CHANGE_TEXT_VIEW);
+                        }
+                    }
+            );
+
+//            if ( mGimbal != null ) {
+//                mGimbal.setGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw, 90, null);
+//                mGimbal.setGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch, 90, null);
+//            }
+
 //
-//            gimbal.getGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
+//            mGimbal.getGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -273,7 +329,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 //                        @Override
 //                        public void onFailure(DJIError djiError) {}
 //                    });
-//            gimbal.getGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
+//            mGimbal.getGimbalSmoothTrackDeadbandOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -283,7 +339,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 //                        public void onFailure(DJIError djiError) {}
 //                    });
 //
-//            gimbal.getGimbalSmoothTrackAccelerationOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
+//            mGimbal.getGimbalSmoothTrackAccelerationOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -295,7 +351,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 //                        }
 //                    });
 //
-//            gimbal.getGimbalSmoothTrackAccelerationOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
+//            mGimbal.getGimbalSmoothTrackAccelerationOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -307,7 +363,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 //                        }
 //                    });
 //
-//            gimbal.getGimbalSmoothTrackSpeedOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
+//            mGimbal.getGimbalSmoothTrackSpeedOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Pitch,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -318,7 +374,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 //                        public void onFailure(DJIError djiError) {
 //                        }
 //                    });
-//            gimbal.getGimbalSmoothTrackSpeedOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
+//            mGimbal.getGimbalSmoothTrackSpeedOnAxis(DJIGimbal.DJIGimbalSmoothTrackAxis.Yaw,
 //                    new DJIBaseComponent.DJICompletionCallbackWith<Integer>() {
 //                        @Override
 //                        public void onSuccess(Integer integer) {
@@ -356,7 +412,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     private void uninitPreviewer() {
         try {
-            mProduct = FPVTutorialApplication.getProductInstance();
+            mProduct = MimrApplication.getProductInstance();
         } catch (Exception exception) {
             mProduct = null;
         }
@@ -431,12 +487,12 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     private void updateTitleBar() {
         if(mConnectStatusTextView == null) return;
         boolean ret = false;
-        DJIBaseProduct product = FPVTutorialApplication.getProductInstance();
+        DJIBaseProduct product = MimrApplication.getProductInstance();
         if (product != null) {
 
             if(product.isConnected()) {
                 //The product is connected
-                mConnectStatusTextView.setText(FPVTutorialApplication.getProductInstance().getModel() + " Connected");
+                mConnectStatusTextView.setText(MimrApplication.getProductInstance().getModel() + " Connected");
                 ret = true;
             } else {
 
@@ -480,7 +536,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     public void showToast(final String msg) {
         runOnUiThread(new Runnable() {
             public void run() {
-                Toast.makeText(FPVTutorialActivity.this, msg, Toast.LENGTH_SHORT).show();
+                Toast.makeText(CameraActivity.this, msg, Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -552,7 +608,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     @Override
     public void onClick(View v) {
         try {
-            mProduct = FPVTutorialApplication.getProductInstance();
+            mProduct = MimrApplication.getProductInstance();
         } catch (Exception exception) {
             mProduct = null;
         }
@@ -573,6 +629,10 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
                 }
                 case R.id.stop_record_btn: {
                     stopRecord();
+                    break;
+                }
+                case R.id.reset_btn: {
+                    resetView();
                     break;
                 }
                 case R.id.follow_btn: {
@@ -621,7 +681,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         lockedPitch = !lockedPitch;
         if ( lockedPitch ) {
             showToast("Pitch locked");
-            lPButton.setCompoundDrawablesWithIntrinsicBounds( R.drawable.ic_action_locked, 0, 0, 0);
+            lPButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_action_locked, 0, 0, 0);
         }
         else {
             showToast("Pitch unlocked");
@@ -651,14 +711,19 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         }
     }
 
-    private void recordClick() {
-        if ( recording ) {
-            //Show buttons
+    private void resetView() {
+        yaw = 0;
+    }
+    private void updateRecordButtons(boolean recording) {
+        this.recording = recording;
+        if ( !recording ) {
+            captureButton.setVisibility(View.VISIBLE);
+            recordButton.setVisibility(View.VISIBLE);
+            stopRecordButton.setVisibility(View.GONE);
         } else {
-            //Hide buttons
             captureButton.setVisibility(View.GONE);
             recordButton.setVisibility(View.GONE);
-            stopRecordButton.setVisibility(View.GONE);
+            stopRecordButton.setVisibility(View.VISIBLE);
         }
     }
     // function for taking photo
@@ -690,6 +755,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     }
     // function for starting recording
     private void recordAction(){
+        updateRecordButtons(true);
         CameraMode cameraMode = CameraMode.RecordVideo;
         mCamera = mProduct.getCamera();
         mCamera.setCameraMode(cameraMode, new DJICompletionCallback() {
@@ -717,6 +783,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     }
     // function for stopping recording
     private void stopRecord(){
+        updateRecordButtons(false);
         mCamera = mProduct.getCamera();
         mCamera.stopRecordVideo(new DJICompletionCallback() {
 
@@ -741,7 +808,7 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
         djiPitch.angle =  -pitch;
         djiRoll.angle = -roll;
         djiYaw.angle = yaw;
-        gimbal.rotateGimbalByAngle(
+        mGimbal.rotateGimbalByAngle(
                 DJIGimbal.DJIGimbalRotateAngleMode.AbsoluteAngle,
                 djiPitch, djiRoll, djiYaw,
                 null
@@ -751,8 +818,10 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
     private void toggleFollow() {
         followMode = !followMode;
         if ( followMode ) {
+            resetButton.setVisibility(View.VISIBLE);
             followButton.setText("Stop Follow");
         } else {
+            resetButton.setVisibility(View.GONE);
             followButton.setText("Start Follow");
         }
         yaw = 0;
@@ -769,11 +838,11 @@ public class FPVTutorialActivity extends Activity implements SurfaceTextureListe
 
     }
     private void dev4() {
-        if ( gimbal == null ) {
+        if ( mGimbal == null ) {
             Log.e(MYTAG, "No gimbal");
             return;
         }
-        DJIGimbal.DJIGimbalConstraints constraints = gimbal.getDjiGimbalConstraints();
+        DJIGimbal.DJIGimbalConstraints constraints = mGimbal.getDjiGimbalConstraints();
         if ( constraints == null ) {
             Log.e(MYTAG, "No Constraints");
             return;
