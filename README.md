@@ -1,10 +1,10 @@
 # mimr
 
-This is the winning project originally created for the Developer Week 2016 hackathon hosted in San Francisco.
+This is the [winning project](https://developer.dji.com/news/announcing-the-winners-of-the-dji-mobile-sdk-hackathon-2016/) originally created for the Developer Week 2016 hackathon hosted in San Francisco.
 
 **This is what it does**
 
-![Mimr in action](https://cdn-images-1.medium.com/max/800/1*h-KJXsYzEeNBbSsxQzm6pA.gif "Mimr in action")
+![Mimr in action](https://cdn-images-1.medium.com/max/800/1*h-KJXsYzEeNBbSsxQzm6pA.gif)
 
 ## Get it
 
