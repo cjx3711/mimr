@@ -1,4 +1,4 @@
-package com.dji.fpvtutorial;
+package com.chaijiaxun.mimr;
 
 import android.app.Application;
 import android.content.Intent;
@@ -6,19 +6,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
-import dji.sdk.SDKManager.DJISDKManager;
+
+import dji.common.error.DJIError;
+import dji.common.error.DJISDKError;
 import dji.sdk.base.DJIBaseComponent;
-import dji.sdk.base.DJIBaseComponent.DJIComponentListener;
 import dji.sdk.base.DJIBaseProduct;
-import dji.sdk.base.DJIBaseProduct.DJIBaseProductListener;
-import dji.sdk.base.DJIBaseProduct.DJIComponentKey;
-import dji.sdk.base.DJISDKError;
+import dji.sdk.sdkmanager.DJISDKManager;
 
-/**
- *
- */
-
-public class MimrApplication extends Application{
+public class MimrApplication extends Application {
 
     //private static final String TAG = MimrApplication.class.getName();
 
@@ -47,58 +42,46 @@ public class MimrApplication extends Application{
         DJISDKManager.getInstance().initSDKManager(this, mDJISDKManagerCallback);
     }
 
-    /**
-     * When starting SDK services, an instance of interface DJISDKManager.DJISDKManagerCallback will be used to listen to 
-     * the SDK Registration result and the product changing.
-     */
     private DJISDKManager.DJISDKManagerCallback mDJISDKManagerCallback = new DJISDKManager.DJISDKManagerCallback() {
-
-        //Listens to the SDK registration result
         @Override
-        public void onGetRegisteredResult(DJISDKError error) {
+        public void onGetRegisteredResult(DJIError error) {
+            Log.d("APPLICATION", error == null ? "success" : error.getDescription());
             if(error == DJISDKError.REGISTRATION_SUCCESS) {
                 DJISDKManager.getInstance().startConnectionToProduct();
                 Handler handler = new Handler(Looper.getMainLooper());
                 handler.post(new Runnable() {
-
                     @Override
                     public void run() {
-                        Toast.makeText(getApplicationContext(), "SDK registered", Toast.LENGTH_LONG).show();
+                        Toast.makeText(getApplicationContext(), "Register App Successful", Toast.LENGTH_LONG).show();
                     }
                 });
             } else {
                 Handler handler = new Handler(Looper.getMainLooper());
                 handler.post(new Runnable() {
-
                     @Override
                     public void run() {
-                        Toast.makeText(getApplicationContext(), "register sdk fails, check network is available", Toast.LENGTH_LONG).show();
+                        Toast.makeText(getApplicationContext(), "Register App Failed! Please enter your App Key and check the network.", Toast.LENGTH_LONG).show();
                     }
                 });
-
             }
             Log.e("TAG", error.toString());
         }
-
-        //Listens to the connected product changing, including two parts, component changing or product connection changing.
         @Override
         public void onProductChanged(DJIBaseProduct oldProduct, DJIBaseProduct newProduct) {
-
             mProduct = newProduct;
             if(mProduct != null) {
                 mProduct.setDJIBaseProductListener(mDJIBaseProductListener);
             }
-
             notifyStatusChange();
         }
     };
 
-    private DJIBaseProductListener mDJIBaseProductListener = new DJIBaseProductListener() {
+    private DJIBaseProduct.DJIBaseProductListener mDJIBaseProductListener = new DJIBaseProduct.DJIBaseProductListener() {
 
         @Override
-        public void onComponentChange(DJIComponentKey key, DJIBaseComponent oldComponent, DJIBaseComponent newComponent) {
+        public void onComponentChange(DJIBaseProduct.DJIComponentKey key, DJIBaseComponent oldComponent, DJIBaseComponent newComponent) {
 
-            if(newComponent != null) {
+            if (newComponent != null) {
                 newComponent.setDJIComponentListener(mDJIComponentListener);
             }
             notifyStatusChange();
@@ -112,7 +95,7 @@ public class MimrApplication extends Application{
 
     };
 
-    private DJIComponentListener mDJIComponentListener = new DJIComponentListener() {
+    private DJIBaseComponent.DJIComponentListener mDJIComponentListener = new DJIBaseComponent.DJIComponentListener() {
 
         @Override
         public void onComponentConnectivityChanged(boolean isConnected) {
@@ -134,5 +117,4 @@ public class MimrApplication extends Application{
             sendBroadcast(intent);
         }
     };
-
 }

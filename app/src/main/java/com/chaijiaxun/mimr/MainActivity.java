@@ -1,4 +1,4 @@
-package com.dji.fpvtutorial;
+package com.chaijiaxun.mimr;
 
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -24,24 +24,26 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import dji.sdk.AirLink.DJILBAirLink.DJIOnReceivedVideoCallback;
-import dji.sdk.Battery.DJIBattery;
-import dji.sdk.Camera.DJICamera;
-import dji.sdk.Camera.DJICamera.CameraReceivedVideoDataCallback;
-import dji.sdk.Codec.DJICodecManager;
-import dji.sdk.Gimbal.DJIGimbal;
-import dji.sdk.Products.DJIAircraft;
-import dji.sdk.base.DJIBaseComponent.DJICompletionCallback;
+import dji.common.battery.DJIBatteryState;
+import dji.common.camera.DJICameraSettingsDef;
+import dji.common.gimbal.DJIGimbalRotateAngleMode;
+import dji.common.gimbal.DJIGimbalRotateDirection;
+import dji.common.product.Model;
+import dji.common.util.DJICommonCallbacks;
+import dji.sdk.airlink.DJILBAirLink.DJIOnReceivedVideoCallback;
+import dji.sdk.battery.DJIBattery;
+import dji.sdk.camera.DJICamera;
+import dji.sdk.camera.DJICamera.CameraReceivedVideoDataCallback;
+import dji.sdk.codec.DJICodecManager;
+import dji.sdk.gimbal.DJIGimbal;
+import dji.common.gimbal.DJIGimbalAngleRotation;
+import dji.sdk.products.DJIAircraft;
 import dji.sdk.base.DJIBaseProduct;
-import dji.sdk.base.DJIBaseProduct.Model;
-import dji.sdk.base.DJIError;
-import dji.sdk.Camera.DJICameraSettingsDef.CameraMode;
-import dji.sdk.Camera.DJICameraSettingsDef.CameraShootPhotoMode;
+import dji.common.error.DJIError;
 
+public class MainActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
 
-public class CameraActivity extends Activity implements SurfaceTextureListener, OnClickListener, SensorEventListener {
-
-    private static final String TAG = CameraActivity.class.getName();
+    private static final String TAG = MainActivity.class.getName();
     private static final String MYTAG = "self";
     private static final int INTERVAL_LOG = 300;
     private static long mLastTime = 0l;
@@ -84,9 +86,9 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
 
     public static float[] mAccelerometer = null;
     public static float[] mGeomagnetic = null;
-    private DJIGimbal.DJIGimbalAngleRotation djiPitch;
-    private DJIGimbal.DJIGimbalAngleRotation djiRoll;
-    private DJIGimbal.DJIGimbalAngleRotation djiYaw;
+    private DJIGimbalAngleRotation djiPitch;
+    private DJIGimbalAngleRotation djiRoll;
+    private DJIGimbalAngleRotation djiYaw;
     private PowerManager.WakeLock wakeLock;
     private int pitchMax = 89;
     private int pitchMin = -20;
@@ -98,14 +100,14 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
     private boolean lockedYaw = false, lockedPitch = false, lockedRoll = false;
 
 
-    public CameraActivity() {
+    public MainActivity() {
         mStringBuffer = new StringBuffer();
     }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_camera);
+        setContentView(R.layout.activity_main);
 
         initUI();
 
@@ -149,9 +151,9 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
         magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
 
-        djiPitch = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
-        djiRoll = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
-        djiYaw = new DJIGimbal.DJIGimbalAngleRotation(true, 0, DJIGimbal.DJIGimbalRotateDirection.Clockwise);
+        djiPitch = new DJIGimbalAngleRotation(true, 0, DJIGimbalRotateDirection.Clockwise);
+        djiRoll = new DJIGimbalAngleRotation(true, 0, DJIGimbalRotateDirection.Clockwise);
+        djiYaw = new DJIGimbalAngleRotation(true, 0, DJIGimbalRotateDirection.Clockwise);
 
     }
 
@@ -299,7 +301,7 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
             mBattery.setBatteryStateUpdateCallback(
                     new DJIBattery.DJIBatteryStateUpdateCallback() {
                         @Override
-                        public void onResult(DJIBattery.DJIBatteryState djiBatteryState) {
+                        public void onResult(DJIBatteryState djiBatteryState) {
                             mStringBuffer.delete(0, mStringBuffer.length());
 
                             mStringBuffer.append(djiBatteryState.getBatteryEnergyRemainingPercent()).
@@ -536,7 +538,7 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
     public void showToast(final String msg) {
         runOnUiThread(new Runnable() {
             public void run() {
-                Toast.makeText(CameraActivity.this, msg, Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -728,15 +730,15 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
     }
     // function for taking photo
     private void captureAction(){
-        CameraMode cameraMode = CameraMode.ShootPhoto;
+        DJICameraSettingsDef.CameraMode cameraMode = DJICameraSettingsDef.CameraMode.ShootPhoto;
         mCamera = mProduct.getCamera();
 
-        mCamera.setCameraMode(cameraMode, new DJICompletionCallback(){
+        mCamera.setCameraMode(cameraMode, new DJICommonCallbacks.DJICompletionCallback(){
             @Override
             public void onResult(DJIError error) {
                 if (error == null) {
-                    CameraShootPhotoMode photoMode = CameraShootPhotoMode.Single; // Set the camera capture mode as Single mode
-                    mCamera.startShootPhoto(photoMode, new DJICompletionCallback() {
+                    DJICameraSettingsDef.CameraShootPhotoMode photoMode = DJICameraSettingsDef.CameraShootPhotoMode.Single; // Set the camera capture mode as Single mode
+                    mCamera.startShootPhoto(photoMode, new DJICommonCallbacks.DJICompletionCallback() {
                         @Override
                         public void onResult(DJIError error) {
                             if (error == null) {
@@ -756,13 +758,13 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
     // function for starting recording
     private void recordAction(){
         updateRecordButtons(true);
-        CameraMode cameraMode = CameraMode.RecordVideo;
+        DJICameraSettingsDef.CameraMode cameraMode = DJICameraSettingsDef.CameraMode.RecordVideo;
         mCamera = mProduct.getCamera();
-        mCamera.setCameraMode(cameraMode, new DJICompletionCallback() {
+        mCamera.setCameraMode(cameraMode, new DJICommonCallbacks.DJICompletionCallback() {
             @Override
             public void onResult(DJIError error) {
                 if (error == null) {
-                    mCamera.startRecordVideo(new DJICompletionCallback() {
+                    mCamera.startRecordVideo(new DJICommonCallbacks.DJICompletionCallback() {
 
                         @Override
                         public void onResult(DJIError error) {
@@ -785,7 +787,7 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
     private void stopRecord(){
         updateRecordButtons(false);
         mCamera = mProduct.getCamera();
-        mCamera.stopRecordVideo(new DJICompletionCallback() {
+        mCamera.stopRecordVideo(new DJICommonCallbacks.DJICompletionCallback() {
 
             @Override
             public void onResult(DJIError error) {
@@ -809,7 +811,7 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
         djiRoll.angle = -roll;
         djiYaw.angle = yaw;
         mGimbal.rotateGimbalByAngle(
-                DJIGimbal.DJIGimbalRotateAngleMode.AbsoluteAngle,
+                DJIGimbalRotateAngleMode.AbsoluteAngle,
                 djiPitch, djiRoll, djiYaw,
                 null
         );
@@ -838,24 +840,24 @@ public class CameraActivity extends Activity implements SurfaceTextureListener, 
 
     }
     private void dev4() {
-        if ( mGimbal == null ) {
-            Log.e(MYTAG, "No gimbal");
-            return;
-        }
-        DJIGimbal.DJIGimbalConstraints constraints = mGimbal.getDjiGimbalConstraints();
-        if ( constraints == null ) {
-            Log.e(MYTAG, "No Constraints");
-            return;
-        }
-        pitchMax = (int) constraints.getPitchStopMax();
-        pitchMin = (int) constraints.getPitchStopMin();
-        yawMax = (int) constraints.getYawStopMax();
-        yawMin = (int) constraints.getYawStopMin();
-        rollMax = (int) constraints.getRollStopMax();
-        rollMin = (int) constraints.getRollStopMin();
-
-        Log.d(MYTAG, "Pitch: " + pitchMin + " - " + pitchMax);
-        Log.d(MYTAG, "Roll : " + rollMin + " - " + rollMax);
-        Log.d(MYTAG, "Yaw  : " + yawMin + " - " + yawMax);
+//        if ( mGimbal == null ) {
+//            Log.e(MYTAG, "No gimbal");
+//            return;
+//        }
+//        DJIGimbalConstraints constraints = mGimbal.getDjiGimbalConstraints();
+//        if ( constraints == null ) {
+//            Log.e(MYTAG, "No Constraints");
+//            return;
+//        }
+//        pitchMax = (int) constraints.getPitchStopMax();
+//        pitchMin = (int) constraints.getPitchStopMin();
+//        yawMax = (int) constraints.getYawStopMax();
+//        yawMin = (int) constraints.getYawStopMin();
+//        rollMax = (int) constraints.getRollStopMax();
+//        rollMin = (int) constraints.getRollStopMin();
+//
+//        Log.d(MYTAG, "Pitch: " + pitchMin + " - " + pitchMax);
+//        Log.d(MYTAG, "Roll : " + rollMin + " - " + rollMax);
+//        Log.d(MYTAG, "Yaw  : " + yawMin + " - " + yawMax);
     }
 }
